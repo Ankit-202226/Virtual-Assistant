@@ -9,7 +9,7 @@ import image6 from "../assets/image6.jpeg";
 import image7 from "../assets/image7.jpeg";
 import { IoArrowBack } from "react-icons/io5";
 import { MdAddPhotoAlternate } from "react-icons/md";
-import { userDataContext } from "../context/userContext";
+import { userDataContext } from "../context/UserContext";
 import { useNavigate } from "react-router-dom";
 function Customize() {
   const {
