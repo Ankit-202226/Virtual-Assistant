@@ -105,122 +105,99 @@ function Home() {
 
   //UseEffect
 
-  useEffect(() => {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
+ useEffect(() => {
+  const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
 
-    if (!SpeechRecognition) {
-      console.error("SpeechRecognition not supported in this browser");
-      return;
+  if (!SpeechRecognition) {
+    console.error("SpeechRecognition not supported in this browser");
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.continuous = true;
+  recognition.lang = "en-US";
+  recognition.interimResults = false;
+  recognitionRef.current = recognition;
+
+  let isMounted = true;
+
+  const startRecognition = () => {
+    if (!isRecognizingRef.current && !isSpeakingRef.current) {
+      try {
+        recognition.start();
+        console.log("Recognition started");
+      } catch (e) {
+        if (e.name !== "InvalidStateError") console.error(e);
+      }
     }
+  };
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.lang = "en-US";
-    recognition.interimResults = false;
+  // Start recognition after mount
+  const startTimeout = setTimeout(startRecognition, 1000);
 
-    recognitionRef.current = recognition;
+  recognition.onstart = () => {
+    isRecognizingRef.current = true;
+    setListening(true);
+  };
 
-    let isMounted = true;
-    const startTimeout = setTimeout(() => {
-      if (isMounted && !isSpeakingRef.current && !isRecognizingRef.current) {
-        try {
-          recognition.start();
-          console.log("Recognition requested to start");
-        } catch (e) {
-          if (e.name !== "InvalidStateError") {
-            console.error(e);
-          }
-        }
-      }
-    }, 1000);
+  recognition.onend = () => {
+    console.log("Recognition ended");
+    isRecognizingRef.current = false;
+    setListening(false);
 
-    recognition.onstart = () => {
-      isRecognizingRef.current = true;
-      setListening(true);
-    };
-    recognition.onend = () => {
-      isRecognizingRef.current = false;
-      setListening(false);
+    // Restart if mounted and not speaking
+    if (isMounted && !isSpeakingRef.current) {
+      setTimeout(startRecognition, 500);
+    }
+  };
 
-      if (isMounted && !isSpeakingRef.current) {
-        setTimeout(() => {
-          if (isMounted) {
-            try {
-              recognition.start();
-              console.log("Recognition restarted");
-            } catch (e) {
-              if (e.name !== "invalidStateError") console.log(e);
-            }
-          }
-        }, 1000); //delay avoids rapid loop
-      }
-    };
+  recognition.onerror = (event) => {
+    if (event.error === "no-speech") {
+      console.warn("No speech detected, will restart on end");
+    } else {
+      console.error("Recognition error:", event.error);
+    }
+    isRecognizingRef.current = false;
+    setListening(false);
+  };
 
-    recognition.onerror = (event) => {
-      console.warn("Recognition error:", event.error);
-      isRecognizingRef.current = false;
-      setListening(false);
+  recognition.onresult = async (e) => {
+    const transcript = e.results[e.results.length - 1][0].transcript.trim();
 
-      // Don't restart here, just log
-      console.log("Waiting for onend to restart...");
-    };
-
-    recognition.onend = () => {
-      console.log("Recognition ended");
-
-      if (isMounted && !isSpeakingRef.current) {
-        setTimeout(() => {
-          try {
-             isRecognizingRef.current = true;
-               setListening(true);
-            recognition.start();
-            console.log("Recognition restarted in onend");
-          } catch (e) {
-            if (e.name !== "InvalidStateError") console.error(e);
-          }
-        }, 500); // short delay helps
-      }
-    };
-
-    recognition.onresult = async (e) => {
-      const transcript = e.results[e.results.length - 1][0].transcript.trim();
-
-      if (
-        userData?.assistantName &&
-        transcript.toLowerCase().includes(userData.assistantName.toLowerCase())
-      ) {
-        setAiText("");
-        setUserText(transcript);
-        recognition.stop();
-        isRecognizingRef.current = false;
-        setListening(false);
-        const data = await getGeminiResponse(transcript);
-        handleCommand(data);
-        setAiText(data.response);
-        setUserText("");
-      }
-    };
-
-    // window.speechSynthesis.onvoicesChanged = ()=>{
-    const greeting = new SpeechSynthesisUtterance(
-      `Hello ${userData.name},what can I help you with?`
-    );
-    greeting.lang = "hi-IN";
-    // greeting.onend = ()=>{
-    //   startTimeout();
-    // };
-    window.speechSynthesis.speak(greeting);
-    // };
-
-    return () => {
-      isMounted = false;
-      clearTimeout(startTimeout);
+    if (
+      userData?.assistantName &&
+      transcript.toLowerCase().includes(userData.assistantName.toLowerCase())
+    ) {
+      setAiText("");
+      setUserText(transcript);
       recognition.stop();
-      setListening(false);
       isRecognizingRef.current = false;
-    };
-  }, []);
+      setListening(false);
+
+      const data = await getGeminiResponse(transcript);
+      handleCommand(data);
+      setAiText(data.response);
+      setUserText("");
+    }
+  };
+
+  // Greeting
+  const greeting = new SpeechSynthesisUtterance(
+    `Hello ${userData.name}, what can I help you with?`
+  );
+  greeting.lang = "hi-IN";
+  greeting.onend = () => startRecognition(); // start recognition after greeting
+  window.speechSynthesis.speak(greeting);
+
+  return () => {
+    isMounted = false;
+    clearTimeout(startTimeout);
+    recognition.stop();
+    setListening(false);
+    isRecognizingRef.current = false;
+  };
+}, []);
 
   //User Interface
 
