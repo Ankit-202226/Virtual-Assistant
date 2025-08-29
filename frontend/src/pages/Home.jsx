@@ -172,6 +172,8 @@ function Home() {
       if (isMounted && !isSpeakingRef.current) {
         setTimeout(() => {
           try {
+             isRecognizingRef.current = true;
+               setListening(true);
             recognition.start();
             console.log("Recognition restarted in onend");
           } catch (e) {
